@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Kayıt Ol</title>
+</head>
+<body>
+<h2>Kayıt Ol</h2>
+<form method="POST">
+    <label>Kullanıcı Adı:</label><br>
+    <input type="text" name="username" required><br><br>
+
+    <label>Şifre:</label><br>
+    <input type="password" name="password" required><br><br>
+    <label>Hesap Türü:</label><br>
+    <select name="role"required>
+        <option value="" disabled selected>Seçiniz</option>
+        <option value="student">Öğrenci</option>
+        <option value="teacher">Öğretmen</option>
+    </select><br><br>
+    <button type="submit">Kayıt Ol</button>
+</form>
+<p>Zaten hesabın var mı?<a href="/login">Giriş Yap</a></p>
+</body>
+</html>
