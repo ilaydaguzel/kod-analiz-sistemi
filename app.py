@@ -24,13 +24,13 @@ def login():
         password=request.form['password']
         for user in users:
             if user['username'] == username and user['password'] == password:
-                session['username']=username and user["password"]==password
+                session['username']=username 
                 session['role']=user['role']
                 if user['role']=='teacher':
                     return redirect(url_for('teacher_panel'))
                 else:
                     return redirect(url_for('student_panel'))
-                return "Hatalı giriş!"
+        return "Hatalı giriş!"
     return render_template("login.html")
 
 @app.route('/teacher')
