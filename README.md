@@ -1,4 +1,3 @@
-
 # Kod Analiz Sistemi
 Web tabanlı kod analiz projesi.
 ## Çalıştırma

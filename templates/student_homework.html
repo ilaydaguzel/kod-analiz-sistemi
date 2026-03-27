@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Ödev Çöz</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        body {
+            font-family: Arial;
+            margin: 40px;
+        }
+
+        .CodeMirror {
+            border: 1px solid #ccc;
+        }
+
+        #output {
+            border: 1px solid #ccc;
+            padding: 10px;
+            min-height: 80px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+        }
+
+        #analysisBox {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 15px;
+            width: 350px;
+        }
+    </style>
+</head>
+<body>
+
+<h2>{{ homework.title }}</h2>
+<p>{{ homework.description }}</p>
+<p>Dil: {{ homework.language }}</p>
+<p>Teslim: {{ homework.due_date }}</p>
+
+<a href="{{ url_for('student_panel') }}">Geri Dön</a>
+
+<br><br>
+
+<label>Dil</label>
+<select id="language">
+    <option value="python">Python</option>
+    <option value="text/x-java">Java</option>
+    <option value="text/x-c++src">C++</option>
+    <option value="javascript">JavaScript</option>
+</select>
+
+<br><br>
+
+<textarea id="code"></textarea>
+
+<br><br>
+
+<button id="runBtn">Çalıştır</button>
+<button onclick="saveAnalysis()">Analizi Kaydet</button>
+
+<pre id="output"></pre>
+
+<div id="analysisBox">
+    <p>Ekleme: <span id="insertValue">0</span></p>
+    <p>Silme: <span id="deleteValue">0</span></p>
+    <p>Duraklama: <span id="pauseValue">0</span></p>
+    <p>Paste: <span id="pasteValue">0</span></p>
+    <p>Hız: <span id="speedValue">0</span></p>
+</div>
+
+<script>
+const homeworkId = {{ homework.id }};
+const homeworkLanguage = "{{ homework.language }}";
+
+const editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+    lineNumbers: true,
+    mode: "python"
+});
+
+editor.setSize("100%", 500);
+
+const languageSelect = document.getElementById("language");
+const runButton = document.getElementById("runBtn");
+const output = document.getElementById("output");
+
+if (homeworkLanguage === "python") {
+    languageSelect.value = "python";
+    editor.setOption("mode", "python");
+}
+
+if (homeworkLanguage === "java") {
+    languageSelect.value = "text/x-java";
+    editor.setOption("mode", "text/x-java");
+}
+
+if (homeworkLanguage === "cpp") {
+    languageSelect.value = "text/x-c++src";
+    editor.setOption("mode", "text/x-c++src");
+}
+
+languageSelect.addEventListener("change", function () {
+    editor.setOption("mode", this.value);
+});
+
+let pyodide = null;
+
+async function loadPython() {
+    pyodide = await loadPyodide();
+}
+
+loadPython();
+
+runButton.addEventListener("click", async function () {
+    if (languageSelect.value !== "python") {
+        output.textContent = "Sadece Python çalışır";
+        return;
+    }
+
+    const code = editor.getValue();
+
+    try {
+        const wrappedCode = `
+import sys
+import io
+buffer = io.StringIO()
+sys.stdout = buffer
+${code}
+sys.stdout = sys.__stdout__
+buffer.getvalue()
+        `;
+
+        const result = await pyodide.runPythonAsync(wrappedCode);
+        output.textContent = result;
+    } catch (error) {
+        output.textContent = error;
+    }
+});
+
+let insertCount = 0;
+let deleteCount = 0;
+let pauseCount = 0;
+let pasteCount = 0;
+
+let lastLength = 0;
+let startTime = Date.now();
+let lastTime = Date.now();
+
+let timeline = [];
+let pauseTimeline = [];
+
+editor.on("change", function(e) {
+    let len = e.getValue().length;
+
+    if (len > lastLength) insertCount += len - lastLength;
+    if (len < lastLength) deleteCount += lastLength - len;
+
+    let now = Date.now();
+    let t = (now - startTime) / 1000;
+
+    timeline.push({time: t, length: len});
+
+    if (now - lastTime > 10000) {
+        pauseCount++;
+        pauseTimeline.push({time: t, length: len});
+    }
+
+    lastTime = now;
+    lastLength = len;
+
+    updateUI();
+});
+
+editor.getWrapperElement().addEventListener("paste", function() {
+    pasteCount++;
+    updateUI();
+});
+
+function updateUI() {
+    let total = (Date.now() - startTime) / 1000;
+    let speed = total > 0 ? (insertCount / total).toFixed(2) : 0;
+
+    document.getElementById("insertValue").textContent = insertCount;
+    document.getElementById("deleteValue").textContent = deleteCount;
+    document.getElementById("pauseValue").textContent = pauseCount;
+    document.getElementById("pasteValue").textContent = pasteCount;
+    document.getElementById("speedValue").textContent = speed;
+}
+
+function saveAnalysis() {
+    let totalTime = (Date.now() - startTime) / 1000;
+    let lineCount = editor.lineCount();
+
+    fetch("/save_analysis", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            homework_id: homeworkId,
+            code: editor.getValue(),
+            language: languageSelect.value,
+            insert: insertCount,
+            delete: deleteCount,
+            pause: pauseCount,
+            paste: pasteCount,
+            time: totalTime,
+            length: lineCount,
+            timeline: timeline,
+            pauseTimeline: pauseTimeline
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert("Kaydedildi");
+        window.location.href = "/student";
+    });
+}
+</script>
+
+</body>
+</html>
